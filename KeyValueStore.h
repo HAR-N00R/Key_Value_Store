@@ -14,6 +14,10 @@ class KeyValueStore {
     void setValue(const std::string& key, const std::string& value);
     bool removeKey(const std::string& key);
     bool exists(const std::string& key) const;
+
+    // File I/O
+    void loadFromFile(const std::string& filename);
+    void saveToFile(const std::string& filename) const;
 };
 
 

@@ -1,34 +1,15 @@
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
 #include "KeyValueStore.h"
 
-void parsing(std::string input, std::string& command, std::string& key, std::string& value) {
+const std::string path = "data.db";
 
-    std::size_t space = input.find(' ');
-    if (space != std::string::npos) {
-        command = input.substr(0, space);
-        input.erase(0, space + 1);
-    }
-    else {
-        command = input;
-        return;
-    }
-    if (input.empty()) {
-        throw std::runtime_error("Key missing");
-    }
-    space = input.find(' ');
-    if (space != std::string::npos) {
-        key = input.substr(0, space);
-        input.erase(0, space + 1);
-    }
-    else {
-        key = input;
-        return;
-    }
-    if (!input.empty()) {
-        value = input;
-        input.clear();
-    }
+void parsing(std::string input, std::string& command, std::string& key, std::string& value) {
+    std::stringstream ss(input);
+    std::getline(ss, command, ' ');
+    std::getline(ss, key, ' ');
+    std::getline(ss, value);
 }
 
 void commandParser(KeyValueStore& kvs) {
@@ -54,6 +35,7 @@ void commandParser(KeyValueStore& kvs) {
 
             if (command == "set" || command == "SET") {
                 kvs.setValue(key, value);
+                kvs.saveToFile(path);
             }
             else if (command == "get" || command == "GET") {
                 try {
@@ -76,6 +58,7 @@ void commandParser(KeyValueStore& kvs) {
             else if (command == "delete" || command == "DELETE") {
                 if (kvs.removeKey(key)) {
                     std::cout << "Key deleted" << std::endl;
+                    kvs.saveToFile(path);
                 }
                 else {
                     std::cout << "Unable to delete" << std::endl;
@@ -97,7 +80,7 @@ int main() {
     std::cout << std::string(60, '=') << std::endl;
 
     KeyValueStore kvs;
-
+    kvs.loadFromFile(path);
     commandParser(kvs);
     return 0;
 }
