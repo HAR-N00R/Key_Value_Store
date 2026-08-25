@@ -3,8 +3,6 @@
 #include <sstream>
 #include "KeyValueStore.h"
 
-const std::string path = "data.db";
-
 void parsing(std::string input, std::string& command, std::string& key, std::string& value) {
     std::stringstream ss(input);
     std::getline(ss, command, ' ');
@@ -35,7 +33,6 @@ void commandParser(KeyValueStore& kvs) {
 
             if (command == "set" || command == "SET") {
                 kvs.setValue(key, value);
-                kvs.saveToFile(path);
             }
             else if (command == "get" || command == "GET") {
                 try {
@@ -56,13 +53,7 @@ void commandParser(KeyValueStore& kvs) {
                 }
             }
             else if (command == "delete" || command == "DELETE") {
-                if (kvs.removeKey(key)) {
-                    std::cout << "Key deleted" << std::endl;
-                    kvs.saveToFile(path);
-                }
-                else {
-                    std::cout << "Unable to delete" << std::endl;
-                }
+                kvs.removeKey(key);
             }
             else {
                 std::cout << "Invalid Command" << std::endl;
@@ -79,8 +70,7 @@ int main() {
     std::cout << "Welcome to Key Value Store" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
 
-    KeyValueStore kvs;
-    kvs.loadFromFile(path);
+    KeyValueStore kvs("data.db");
     commandParser(kvs);
     return 0;
 }
