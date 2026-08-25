@@ -51,16 +51,6 @@ void KeyValueStore::loadFromFile(const std::string& filename) {
         }
         setValue(key, value);
     }
-
-    /*
-    std::string line;
-    while (std::getline(file, line)) {
-        std::string key;
-        std::string value;
-        importHelper(line, key, value);
-        setValue(key, value);
-    }
-    */
 }
 
 void KeyValueStore::saveToFile(const std::string& filename) const {
