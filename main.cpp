@@ -22,6 +22,10 @@ void commandParser(KeyValueStore& kvs) {
         if (input == "quit" || input == "QUIT") {
             return;
         }
+        if (input == "compact" || input == "COMPACT") {
+            kvs.compact();
+            continue;
+        }
         try {
             parsing(input, command, key, value);
             if (key.empty()) {
@@ -53,14 +57,16 @@ void commandParser(KeyValueStore& kvs) {
                 }
             }
             else if (command == "delete" || command == "DELETE") {
-                kvs.removeKey(key);
+                if (!kvs.removeKey(key)) {
+                    std::cout << "Key doesn't exist" << std::endl;
+                }
             }
             else {
                 std::cout << "Invalid Command" << std::endl;
             }
         }
         catch (const std::runtime_error& error) {
-            std::cout << "Invalid command" << std::endl;
+            std::cout << error.what() << std::endl;
         }
     }
 }
