@@ -1,10 +1,10 @@
 # Persistent Key-Value Store
 
-This is a small persistent key-value store written in C++.
+A persistent key-value storage engine written in C++20, backed by an in-memory hash index and an append-only binary log.
 
 The program stores key-value pairs in memory for fast access, while also saving changes to a binary file so the data is still available after restarting the program.
 
-The project supports basic commands such as:
+The command-line interface supports:
 
 ```text
 SET username Div
@@ -21,11 +21,11 @@ QUIT
 - Get values using a key
 - Check if a key exists
 - Delete keys
-- Save data permanently to disk
+- Persistent storage across program restarts
 - Binary file storage
 - Append-only log
 - Delete tombstones
-- Recovery after an incomplete write
+- Recovery from incomplete final log records
 - Basic corruption detection
 - Database compaction
 - Automated tests
@@ -314,7 +314,7 @@ cmake --build build
 Run the main program:
 
 ```bash
-./build/Key_Value_Store
+./build/kvstore
 ```
 
 The program creates a file called:
@@ -328,13 +328,13 @@ This file stores the database log.
 ## Run Tests
 
 ```bash
-./build/KeyValueStoreTests
+./build/kvstore_tests
 ```
 
 ## Run Benchmarks
 
 ```bash
-./build/KeyValueStoreBenchmark
+./build/kvstore_benchmark
 ```
 
 For better benchmark results, use a Release build:
@@ -342,7 +342,7 @@ For better benchmark results, use a Release build:
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release
-./build-release/KeyValueStoreBenchmark
+./build-release/kvstore_benchmark
 ```
 
 ## Limitations
