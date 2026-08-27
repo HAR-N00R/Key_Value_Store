@@ -1,0 +1,25 @@
+# CLion / JetBrains
+.idea/
+*.iml
+
+# CMake build directories
+cmake-build-*/
+build/
+out/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Key-value store database files
+*.db
+*.db.tmp
+*.db.old
+
+# macOS
+.DS_Store
