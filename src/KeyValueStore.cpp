@@ -13,6 +13,9 @@ std::string KeyValueStore::getValue(const std::string& key) const {
 }
 
 void KeyValueStore::setValue(const std::string& key, const std::string& value) {
+    if (key.empty()) {
+        throw std::runtime_error("Key cannot be empty");
+    }
     appendFile(Operation::Set, key, value);
     keyValues[key] = value;
 }

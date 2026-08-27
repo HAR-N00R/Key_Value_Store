@@ -76,7 +76,12 @@ int main() {
     std::cout << "Welcome to Key Value Store" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
 
-    KeyValueStore kvs("data.db");
-    commandParser(kvs);
+    try {
+        KeyValueStore kvs("data.db");
+        commandParser(kvs);
+    }
+    catch (const std::runtime_error& e) {
+        std::cout << "Failed to open database: Corrupted file: invalid operation" << std::endl;
+    }
     return 0;
 }
