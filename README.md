@@ -242,37 +242,6 @@ The project includes automated tests for:
 
 The tests use separate database files so they do not modify the normal `data.db` file.
 
-## Benchmarks
-
-I also created benchmarks to measure the storage engine.
-
-Results from one local run:
-
-| Benchmark | 1,000 Operations | 10,000 Operations | 100,000 Operations |
-|---|---:|---:|---:|
-| SET | 52,933 ops/sec | 60,018 ops/sec | 54,234 ops/sec |
-| GET | 5.61M ops/sec | 5.33M ops/sec | 5.01M ops/sec |
-| DELETE | 65,369 ops/sec | 59,790 ops/sec | 54,429 ops/sec |
-| Recovery | 1.5 ms | 14.2 ms | 151.3 ms |
-
-The exact results depend on the computer and build settings.
-
-### Compaction Benchmark
-
-I overwrote one key 100,000 times.
-
-Before compaction:
-
-```text
-Historical records: 100,000
-Live keys: 1
-Database size: about 2.56 MB
-Recovery time: about 128 ms
-```
-
-After compaction, only one current SET record was needed.
-
-This showed how an append-only log can grow over time and how compaction can reduce both the database size and the amount of work needed during startup.
 
 ## Project Structure
 
@@ -287,11 +256,8 @@ Key_Value_Store/
 │   ├── KeyValueStore.cpp
 │   └── KeyValueStore.h
 │
-├── tests/
-│   └── KeyValueStoreTests.cpp
-│
-└── benchmarks/
-    └── KeyValueStoreBenchmark.cpp
+└── tests/
+    └── KeyValueStoreTests.cpp
 ```
 
 ## Requirements
@@ -331,19 +297,6 @@ This file stores the database log.
 ./build/kvstore_tests
 ```
 
-## Run Benchmarks
-
-```bash
-./build/kvstore_benchmark
-```
-
-For better benchmark results, use a Release build:
-
-```bash
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release
-./build-release/kvstore_benchmark
-```
 
 ## Limitations
 
