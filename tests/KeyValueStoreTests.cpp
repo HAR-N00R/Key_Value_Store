@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <cstdint>
-#include "../src/KeyValueStore.h"
+#include "./KeyValueStore/KeyValueStore.h"
 
 void basicOperationTests() {
     const std::string testFilePath = "test_basic.db";

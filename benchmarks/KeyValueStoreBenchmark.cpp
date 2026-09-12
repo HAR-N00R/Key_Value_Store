@@ -4,7 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
-#include "../src/KeyValueStore.h"
+#include "../src/KeyValueStore/KeyValueStore.h"
 
 namespace
 {

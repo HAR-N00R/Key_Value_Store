@@ -7,13 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(kvstore_lib
-        src/KeyValueStore.cpp
+        src/KeyValueStore/KeyValueStore.cpp
 )
 
 target_include_directories(kvstore_lib PUBLIC src)
 
 add_executable(kvstore
         src/main.cpp
+        src/Server/Server.cpp
+        src/Protocol/CommandParser.cpp
 )
 
 target_link_libraries(kvstore PRIVATE kvstore_lib)
@@ -22,7 +24,15 @@ add_executable(kvstore_tests
         tests/KeyValueStoreTests.cpp
 )
 
+
 target_link_libraries(kvstore_tests PRIVATE kvstore_lib)
+
+add_executable(command_parser_tests
+        tests/CommandParserTests.cpp
+        src/Protocol/CommandParser.cpp
+)
+
+target_link_libraries(command_parser_tests PRIVATE kvstore_lib)
 
 add_executable(kvstore_benchmark
         benchmarks/KeyValueStoreBenchmark.cpp
@@ -35,4 +45,9 @@ enable_testing()
 add_test(
         NAME KeyValueStoreTests
         COMMAND kvstore_tests
+)
+
+add_test(
+        NAME CommandParserTests
+        COMMAND command_parser_tests
 )
