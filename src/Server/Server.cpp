@@ -1,14 +1,14 @@
 #include "Server.h"
+#include <iostream>
 #include <Protocol/CommandParser.h>
-#include <sstream>
 #include <stdexcept>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <unistd.h>
 
 // Key = 1MB
 // Value = 16MB
-constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 17;
+constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 20;
 
 
 Server::Server() : store("data.db") {
@@ -53,53 +53,61 @@ int Server::acceptSocket() {
     return clientSocket;
 }
 
-void Server::handleClient() {
-    int clientSocket = acceptSocket();
+void Server::handleClient(Socket& client) {
+    int clientSocket = client.getSocket();
+    bool connected = true;
     try {
-        std::string request = receiveFrame(clientSocket);
         CommandParser parser;
-        std::string response = executeCommand(parser.parse(request));
-        sendFrame(clientSocket, response);
-        close(clientSocket);
+        while (connected) {
+            std::string request;
+            connected = receiveFrame(clientSocket, request);
+            if (!connected) {
+                break;
+            }
+            std::string response = executeCommand(parser.parse(request));
+            sendFrame(clientSocket, response);
+        }
     }
-    catch (const std::runtime_error& e) {
-        close(clientSocket);
-        throw;
+    catch (std::exception& e) {
+        std::cerr << e.what() << std::endl;
     }
 }
 
-std::string Server::receiveFrame(int clientSocket) {
-    uint32_t messageSize;
+bool Server::receiveFrame(int clientSocket, std::string& message) {
+    uint32_t messageSize = 0;
     std::size_t totalReceivedSize = 0;
-    while (totalReceivedSize < 4) {
+    while (totalReceivedSize < sizeof(uint32_t)) {
         ssize_t receivedSize = recv(clientSocket, reinterpret_cast<char*>(&messageSize) + totalReceivedSize,
             (sizeof(uint32_t)- totalReceivedSize), 0);
         if (receivedSize == -1) {
             throw std::runtime_error("Failed to receive data from client");
         }
-        if (receivedSize == 0) {
-            throw std::runtime_error("Failed to receive data from client");
+        if (receivedSize == 0 && totalReceivedSize == 0) {
+            return false;
+        }
+        if (receivedSize == 0 && totalReceivedSize != 0) {
+            throw std::runtime_error("Client disconnected while receiving");
         }
         totalReceivedSize += static_cast<std::size_t>(receivedSize);
     }
-    messageSize = ntohl(messageSize);
-    if (messageSize > MAX_FRAME_SIZE) {
-        throw std::runtime_error("Message too large");
-    }
-    std::string message(messageSize, '\0');
-    totalReceivedSize = 0;
-    while (totalReceivedSize < (messageSize)) {
-        ssize_t receivedSize = recv(clientSocket, message.data() + totalReceivedSize, messageSize - totalReceivedSize,
-            0);
-        if (receivedSize == -1) {
-            throw std::runtime_error("Failed to receive data from client");
+        messageSize = ntohl(messageSize);
+        if (messageSize > MAX_FRAME_SIZE) {
+            throw std::runtime_error("Message too large");
         }
-        if (receivedSize == 0) {
-            throw std::runtime_error("client disconnected");
+        message.resize(messageSize, '\0');
+        totalReceivedSize = 0;
+        while (totalReceivedSize < (messageSize)) {
+            ssize_t receivedSize = recv(clientSocket, message.data() + totalReceivedSize, messageSize - totalReceivedSize,
+                0);
+            if (receivedSize == -1) {
+                throw std::runtime_error("Failed to receive data from client");
+            }
+            if (receivedSize == 0) {
+                throw std::runtime_error("Client disconnected while receiving");
+            }
+            totalReceivedSize += static_cast<std::size_t>(receivedSize);
         }
-        totalReceivedSize += static_cast<std::size_t>(receivedSize);
-    }
-    return message;
+        return true;
 }
 
 void Server::sendFrame(int clientSocket, const std::string& frame) {
