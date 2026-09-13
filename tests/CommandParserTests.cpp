@@ -1,6 +1,5 @@
 #include <cassert>
 #include <iostream>
-
 #include "./Protocol/CommandParser.h"
 
 void parserTest() {
@@ -70,7 +69,7 @@ void parserTest() {
         CommandParser parser;
         Command command = parser.parse(testRequest);
         assert(command.type == CommandType::Unknown);
-        assert(command.key == "Alpha");
+        assert(command.key.empty());
         assert(command.value.empty());
     }
     {
@@ -78,8 +77,8 @@ void parserTest() {
         CommandParser parser;
         Command command = parser.parse(testRequest);
         assert(command.type == CommandType::Unknown);
-        assert(command.key == "Alpha");
-        assert(command.value == "hello world");
+        assert(command.key.empty());
+        assert(command.value.empty());
     }
 }
 

@@ -9,5 +9,4 @@ class CommandParser {
     Command parse(const std::string& input);
 };
 
-
 #endif
