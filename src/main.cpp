@@ -1,6 +1,5 @@
 #include <iostream>
 #include <thread>
-#include "KeyValueStore/KeyValueStore.h"
 #include "Server/Server.h"
 
 int main() {
