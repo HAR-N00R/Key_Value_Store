@@ -1,87 +1,22 @@
 #include <iostream>
-#include <stdexcept>
-#include <sstream>
-#include "KeyValueStore.h"
-
-void parsing(std::string input, std::string& command, std::string& key, std::string& value) {
-    std::stringstream ss(input);
-    std::getline(ss, command, ' ');
-    std::getline(ss, key, ' ');
-    std::getline(ss, value);
-}
-
-void commandParser(KeyValueStore& kvs) {
-    while (true) {
-        std::string input;
-
-        std::string command;
-        std::string key;
-        std::string value;
-        std::cout << "Input command: ";
-        getline(std::cin, input);
-        if (input == "quit" || input == "QUIT") {
-            return;
-        }
-        if (input == "compact" || input == "COMPACT") {
-            kvs.compact();
-            continue;
-        }
-        try {
-            parsing(input, command, key, value);
-            if (key.empty()) {
-                throw std::runtime_error("Invalid command");
-            }
-            if ((command != "set" && command != "SET") && !value.empty()) {
-                throw std::runtime_error("Invalid command");
-            }
-
-            if (command == "set" || command == "SET") {
-                kvs.setValue(key, value);
-            }
-            else if (command == "get" || command == "GET") {
-                try {
-                    std::string value = kvs.getValue(key);
-                    std::cout << "Key: " << key << std::endl;
-                    std::cout << "Value: " << value << std::endl;
-                }
-                catch (const std::out_of_range& e) {
-                    std::cout << "Key doesn't exist" << std::endl;
-                }
-            }
-            else if (command == "exists" || command == "EXISTS") {
-                if (kvs.exists(key)) {
-                    std::cout << "Key exists" << std::endl;
-                }
-                else {
-                    std::cout << "Key doesn't exist" << std::endl;
-                }
-            }
-            else if (command == "delete" || command == "DELETE") {
-                if (!kvs.removeKey(key)) {
-                    std::cout << "Key doesn't exist" << std::endl;
-                }
-            }
-            else {
-                std::cout << "Invalid Command" << std::endl;
-            }
-        }
-        catch (const std::runtime_error& error) {
-            std::cout << error.what() << std::endl;
-        }
-    }
-}
+#include <thread>
+#include "KeyValueStore/KeyValueStore.h"
+#include "Server/Server.h"
 
 int main() {
     std::cout << std::string(60, '=') << std::endl;
     std::cout << "Welcome to Key Value Store" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
 
-    try {
-        KeyValueStore kvs("data.db");
-        commandParser(kvs);
+    Server server;
+    while (true) {
+        int fd = server.acceptSocket();
+        std::thread t([&server, fd](){
+            Socket client(fd);
+            server.handleClient(client);
+        });
+        t.detach();
     }
-    catch (const std::runtime_error& e) {
-        std::cout << "Failed to open database: Corrupted file: invalid operation" << std::endl;
-    }
+
     return 0;
 }
