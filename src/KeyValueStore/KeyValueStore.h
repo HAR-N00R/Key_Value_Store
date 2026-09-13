@@ -4,12 +4,14 @@
 #include <string>
 #include <fstream>
 #include <cstdint>
+#include <shared_mutex>
 
 
 class KeyValueStore {
     private:
     std::string filepath;
     std::unordered_map<std::string, std::string> keyValues;
+    mutable std::shared_mutex storeMutex;
 
     enum class Operation : std::uint8_t {
         Set = 1,
@@ -24,12 +26,12 @@ class KeyValueStore {
     void writeToFile(std::ofstream& file, Operation operation, const std::string& key, const std::string& value) const;
 
     public:
-    KeyValueStore(const std::string& path);
+    explicit KeyValueStore(const std::string& path);
     std::string getValue(const std::string& key) const;
     void setValue(const std::string& key, const std::string& value);
     bool removeKey(const std::string& key);
     bool exists(const std::string& key) const;
-    void compact() const;
+    void compact();
 
 
 };

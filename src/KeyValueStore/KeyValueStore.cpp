@@ -2,17 +2,19 @@
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
-#include <iostream>
+#include <mutex>
 
 KeyValueStore::KeyValueStore(const std::string& path) : filepath(path) {
     loadFromFile();
 }
 
 std::string KeyValueStore::getValue(const std::string& key) const {
+    std::shared_lock lock(storeMutex);
     return keyValues.at(key);
 }
 
 void KeyValueStore::setValue(const std::string& key, const std::string& value) {
+    std::unique_lock lock(storeMutex);
     if (key.empty()) {
         throw std::runtime_error("Key cannot be empty");
     }
@@ -21,14 +23,16 @@ void KeyValueStore::setValue(const std::string& key, const std::string& value) {
 }
 
 bool KeyValueStore::removeKey(const std::string& key) {
-    if (!exists(key)) {
+    std::unique_lock lock(storeMutex);
+    if (!keyValues.contains(key)) {
         return false;
     }
-    appendFile(Operation::Delete,key,"");
+    appendFile(Operation::Delete, key, "");
     return keyValues.erase(key);
 }
 
 bool KeyValueStore::exists(const std::string& key) const {
+    std::shared_lock lock(storeMutex);
     return keyValues.contains(key);
 }
 
@@ -50,7 +54,6 @@ void KeyValueStore::loadFromFile() {
     std::string value;
 
     while (true) {
-
         std::streampos pos = file.tellg();
 
         if (!file.read(reinterpret_cast<char*>(&operationValue), sizeof(operationValue))) {
@@ -108,8 +111,7 @@ void KeyValueStore::appendFile(Operation operation, const std::string& key, cons
 }
 
 void KeyValueStore::writeToFile(std::ofstream& file, Operation operation, const std::string& key,
-    const std::string& value) const {
-
+                                const std::string& value) const {
     std::uint8_t operationValue = static_cast<std::uint8_t>(operation);
     std::uint64_t keySize = key.size();
     std::uint64_t valueSize = value.size();
@@ -132,7 +134,8 @@ void KeyValueStore::writeToFile(std::ofstream& file, Operation operation, const 
     }
 }
 
-void KeyValueStore::compact() const {
+void KeyValueStore::compact() {
+    std::unique_lock lock(storeMutex);
     std::string tempPath = filepath + ".tmp";
     std::string backUpPath = filepath + ".old";
     std::ofstream file(tempPath, std::ios::binary);
@@ -140,7 +143,7 @@ void KeyValueStore::compact() const {
         throw std::runtime_error("Unable to save file");
     }
     for (const auto& [key, value] : keyValues) {
-        writeToFile(file,Operation::Set,key,value);
+        writeToFile(file, Operation::Set, key, value);
     }
     if (!file) {
         throw std::runtime_error("Failed to write to file");
@@ -151,5 +154,4 @@ void KeyValueStore::compact() const {
     std::filesystem::rename(filepath, backUpPath);
     std::filesystem::rename(tempPath, fileName);
     std::filesystem::remove(backUpPath);
-
 }
