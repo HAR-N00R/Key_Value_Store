@@ -16,4 +16,4 @@ struct Command {
     std::string value;
 };
 
-#endif //PERSISTENTKEYVALUESTORE_COMMAND_H
+#endif
