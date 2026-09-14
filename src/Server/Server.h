@@ -19,7 +19,7 @@ class Server {
     void sendAll(int clientSocket, const char* data, std::size_t size);
 
     public:
-    Server();
+    Server(const std::string& filePath);
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
     ~Server();
