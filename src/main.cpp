@@ -7,7 +7,7 @@ int main() {
     std::cout << "Welcome to Key Value Store" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
 
-    Server server;
+    Server server("data.db");
     while (true) {
         int fd = server.acceptSocket();
         std::thread t([&server, fd](){
