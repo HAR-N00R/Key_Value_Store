@@ -16,6 +16,7 @@ add_executable(kvstore
         src/main.cpp
         src/Server/Server.cpp
         src/Protocol/CommandParser.cpp
+        src/Network/Socket.cpp
 )
 
 target_link_libraries(kvstore PRIVATE kvstore_lib)
@@ -24,7 +25,6 @@ add_executable(kvstore_tests
         tests/KeyValueStoreTests.cpp
 )
 
-
 target_link_libraries(kvstore_tests PRIVATE kvstore_lib)
 
 add_executable(command_parser_tests
@@ -32,7 +32,23 @@ add_executable(command_parser_tests
         src/Protocol/CommandParser.cpp
 )
 
-target_link_libraries(command_parser_tests PRIVATE kvstore_lib)
+target_include_directories(command_parser_tests PRIVATE src)
+
+add_executable(network_framing_tests
+        tests/NetworkFramingTest.cpp
+        src/Network/Socket.cpp
+        src/Server/Server.cpp
+        src/Protocol/CommandParser.cpp
+)
+
+target_link_libraries(network_framing_tests PRIVATE kvstore_lib)
+
+add_executable(concurrency_tests
+        tests/ServerConcurrencyTests.cpp
+        src/Network/Socket.cpp
+)
+
+target_include_directories(concurrency_tests PRIVATE src)
 
 add_executable(kvstore_benchmark
         benchmarks/KeyValueStoreBenchmark.cpp
