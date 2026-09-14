@@ -11,7 +11,7 @@
 constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 20;
 
 
-Server::Server() : store("data.db") {
+Server::Server(const std::string& filePath) : store(filePath) {
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket < 0) {
         throw std::runtime_error("Failed to open socket");
