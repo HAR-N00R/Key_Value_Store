@@ -46,6 +46,9 @@ target_link_libraries(network_framing_tests PRIVATE kvstore_lib)
 add_executable(concurrency_tests
         tests/ServerConcurrencyTests.cpp
         src/Network/Socket.cpp
+        src/Server/Server.cpp
+        src/Protocol/CommandParser.cpp
+        src/KeyValueStore/KeyValueStore.cpp
 )
 
 target_include_directories(concurrency_tests PRIVATE src)
@@ -66,4 +69,9 @@ add_test(
 add_test(
         NAME CommandParserTests
         COMMAND command_parser_tests
+)
+
+add_test(
+        NAME ServerConcurrencyTests
+        COMMAND concurrency_tests
 )
