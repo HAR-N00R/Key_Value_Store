@@ -8,14 +8,7 @@ int main() {
     std::cout << std::string(60, '=') << std::endl;
 
     Server server("data.db");
-    while (true) {
-        int fd = server.acceptSocket();
-        std::thread t([&server, fd](){
-            Socket client(fd);
-            server.handleClient(client);
-        });
-        t.detach();
-    }
+    server.run();
 
     return 0;
 }

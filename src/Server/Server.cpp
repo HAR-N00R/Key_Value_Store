@@ -1,7 +1,9 @@
 #include "Server.h"
+#include "Protocol/CommandParser.h"
 #include <iostream>
-#include <Protocol/CommandParser.h>
+#include <vector>
 #include <stdexcept>
+#include <thread>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -43,32 +45,58 @@ Server::~Server() {
     }
 }
 
+void Server::run() {
+    isRunning.store(true);
+    std::vector<std::thread> threads;
+    while (isRunning.load()) {
+        int fd = acceptSocket();
+        if (!isRunning.load()) {
+            break;
+        }
+        threads.emplace_back([fd, this](){
+            Socket client(fd);
+            handleClient(client);
+        });
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+}
+
+void Server::stop() {
+    isRunning.store(false);
+    shutdown(serverSocket, SHUT_RDWR);
+}
+
 int Server::acceptSocket() {
     sockaddr_in clientAddr{};
     socklen_t len = sizeof(clientAddr);
     int clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &len);
-    if (clientSocket == -1) {
+    if (clientSocket == -1 && isRunning.load()) {
         throw std::runtime_error("Failed to accept connection");
+    }
+    if (!isRunning.load()) {
+        if (clientSocket >= 0) {
+            close(clientSocket);
+        }
     }
     return clientSocket;
 }
 
 void Server::handleClient(Socket& client) {
     int clientSocket = client.getSocket();
-    bool connected = true;
     try {
         CommandParser parser;
-        while (connected) {
+        while (true) {
             std::string request;
-            connected = receiveFrame(clientSocket, request);
-            if (!connected) {
+            if (!receiveFrame(clientSocket, request)) {
                 break;
             }
             std::string response = executeCommand(parser.parse(request));
             sendFrame(clientSocket, response);
         }
     }
-    catch (std::exception& e) {
+    catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
 }

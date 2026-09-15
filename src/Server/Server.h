@@ -2,12 +2,14 @@
 #define SERVER_H
 #include <string>
 #include <Network/Socket.h>
+#include <atomic>
 #include "KeyValueStore/KeyValueStore.h"
 #include "Protocol/Command.h"
 
 class Server {
     private:
     int serverSocket = -1;
+    std::atomic<bool> isRunning{false};
 
     //KVS functions
     KeyValueStore store;
@@ -25,6 +27,9 @@ class Server {
     ~Server();
     int acceptSocket();
     void handleClient(Socket& socket);
+
+    void run();
+    void stop();
 
 };
 
