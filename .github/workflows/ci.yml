@@ -3,6 +3,7 @@ name: Build and Test
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -16,14 +17,19 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: ✅ Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Configure
+      - name: 🔍 Show tool versions
+        run: |
+          cmake --version
+          c++ --version
+
+      - name: 🛠 Configure CMake
         run: cmake -S . -B build
 
-      - name: Build
+      - name: 🔨 Build project
         run: cmake --build build
 
-      - name: Run tests
+      - name: 🧪 Run tests
         run: ctest --test-dir build --output-on-failure
