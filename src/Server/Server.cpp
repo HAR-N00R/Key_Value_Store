@@ -8,12 +8,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <cerrno>
+#include <csignal>
 
 // command + 16 MB value + protocol overhead
 constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 20;
 
 
 Server::Server(const std::string& filePath) : store(filePath) {
+    std::signal(SIGPIPE, SIG_IGN);
     serverSocket.store(socket(AF_INET, SOCK_STREAM, 0));
     if (serverSocket.load() < 0) {
         throw std::runtime_error("Failed to open socket");
@@ -107,11 +109,6 @@ int Server::acceptSocket() {
                 return -1;
             }
             throw std::runtime_error("Failed to accept connection");
-        }
-        int opt = 1;
-        if (setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof (opt)) == -1) {
-            close(clientSocket);
-            throw std::runtime_error("Failed to set NO-SIGPIPE");
         }
         if (!isRunning.load()) {
             close(clientSocket);
