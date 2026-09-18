@@ -49,33 +49,36 @@ std::string receiveFrame(int fd) {
     return message;
 }
 
-std::string sendFrame(int fd, const std::string& request) {
-    uint32_t requestSize = request.size();
-    uint32_t networkSize = htonl(requestSize);
-
-    const char* dataSize = reinterpret_cast<const char*>(&networkSize);
+void sendAll(int fd, const char* data, std::size_t size) {
     std::size_t totalSentSize = 0;
-    while (totalSentSize < sizeof(uint32_t)) {
-        ssize_t sendSize = send(fd, dataSize + totalSentSize, sizeof(uint32_t) - totalSentSize, 0);
+    while (totalSentSize < size) {
+        ssize_t sendSize = send(fd, data + totalSentSize, size - totalSentSize, 0);
         if (sendSize == -1) {
-            throw std::runtime_error("Failed to send data to client");
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EPIPE) {
+                throw std::runtime_error("Client disconnected while sending");
+            }
+            else {
+                throw std::runtime_error("Failed to send data to client");
+            }
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
         }
         totalSentSize += static_cast<std::size_t>(sendSize);
     }
-    totalSentSize = 0;
-    while (totalSentSize < requestSize) {
-        ssize_t sendSize = send(fd, request.data() + totalSentSize, requestSize - totalSentSize , 0);
-        if (sendSize == -1) {
-            throw std::runtime_error("Failed to send data to client");
-        }
-        if (sendSize == 0) {
-            throw std::runtime_error("Failed to send data to client");
-        }
-        totalSentSize += static_cast<std::size_t>(sendSize);
+}
+std::string sendFrame(int fd, const std::string& frame) {
+    if (frame.size() > MAX_FRAME_SIZE) {
+        throw std::runtime_error("Message too large to send");
     }
+    uint32_t frameSize = static_cast<uint32_t>(frame.size());
+    uint32_t networkSize = htonl(frameSize);
+    std::string packet(reinterpret_cast<const char*>(&networkSize), sizeof(networkSize));
+    packet += frame;
+    sendAll(fd,packet.data(), packet.size());
     return receiveFrame(fd);
 }
 

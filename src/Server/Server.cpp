@@ -175,14 +175,15 @@ bool Server::receiveFrame(int clientSocket, std::string& message) {
     return true;
 }
 
-void Server::sendFrame(int clientSocket, const std::string& frame) {
+void Server::sendFrame(int fd, const std::string& frame) {
     if (frame.size() > MAX_FRAME_SIZE) {
         throw std::runtime_error("Message too large to send");
     }
     uint32_t frameSize = static_cast<uint32_t>(frame.size());
-    frameSize = htonl(frameSize);
-    sendAll(clientSocket, reinterpret_cast<const char*>(&frameSize), sizeof(uint32_t));
-    sendAll(clientSocket, frame.data(), frame.size());
+    uint32_t networkSize = htonl(frameSize);
+    std::string packet(reinterpret_cast<const char*>(&networkSize), sizeof(networkSize));
+    packet += frame;
+    sendAll(fd,packet.data(), packet.size());
 }
 
 void Server::sendAll(int clientSocket, const char* data, std::size_t size) {
