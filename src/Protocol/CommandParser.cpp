@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
-Command CommandParser::parse(const std::string& input) {
+Command CommandParser::parse(const std::string& input) const {
     std::stringstream ss(input);
     std::string command;
     std::string key;
@@ -15,7 +15,10 @@ Command CommandParser::parse(const std::string& input) {
         value = ss.str().substr(pos);
     }
 
-    std::transform(command.begin(), command.end(), command.begin(), ::tolower);
+    std::transform(command.begin(), command.end(), command.begin(), [](unsigned char c)
+    {
+        return static_cast<char>(std::tolower(c));
+    });
 
     CommandType type;
     if (command == "set" && !key.empty() && !value.empty()) {
