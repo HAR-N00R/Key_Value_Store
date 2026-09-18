@@ -70,12 +70,6 @@ add_executable(server_robustness_tests
 
 target_link_libraries(server_robustness_tests PRIVATE kvstore_lib)
 
-add_executable(kvstore_benchmark
-        benchmarks/KeyValueStoreBenchmark.cpp
-)
-
-target_link_libraries(kvstore_benchmark PRIVATE kvstore_lib)
-
 enable_testing()
 
 add_test(
