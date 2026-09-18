@@ -6,7 +6,7 @@
 
 class CommandParser {
     public:
-    Command parse(const std::string& input);
+    Command parse(const std::string& input) const;
 };
 
 #endif
