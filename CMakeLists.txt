@@ -53,6 +53,26 @@ add_executable(concurrency_tests
 
 target_include_directories(concurrency_tests PRIVATE src)
 
+add_executable(server_shutdown_tests
+        tests/serverShutdownTests.cpp
+        src/Network/Socket.cpp
+        src/Server/Server.cpp
+        src/Protocol/CommandParser.cpp
+        src/KeyValueStore/KeyValueStore.cpp
+)
+
+target_include_directories(server_shutdown_tests PRIVATE src)
+
+add_executable(server_robustness_tests
+        tests/ServerRobustnessTests.cpp
+        src/Network/Socket.cpp
+        src/Server/Server.cpp
+        src/Protocol/CommandParser.cpp
+        src/KeyValueStore/KeyValueStore.cpp
+)
+
+target_include_directories(server_robustness_tests PRIVATE src)
+
 add_executable(kvstore_benchmark
         benchmarks/KeyValueStoreBenchmark.cpp
 )
@@ -74,4 +94,9 @@ add_test(
 add_test(
         NAME ServerConcurrencyTests
         COMMAND concurrency_tests
+)
+
+add_test(
+        NAME ServerRobustnessTests
+        COMMAND server_robustness_tests
 )
