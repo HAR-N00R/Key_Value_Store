@@ -54,25 +54,28 @@ std::string sendFrame(int fd, const std::string& request) {
     uint32_t networkSize = htonl(requestSize);
 
     const char* dataSize = reinterpret_cast<const char*>(&networkSize);
-    for (std::size_t i = 0; i < sizeof(networkSize); ++i) {
-        ssize_t sendSize = send(fd, dataSize + i, 1, 0);
+    std::size_t totalSentSize = 0;
+    while (totalSentSize < sizeof(uint32_t)) {
+        ssize_t sendSize = send(fd, dataSize + totalSentSize, sizeof(uint32_t) - totalSentSize, 0);
         if (sendSize == -1) {
             throw std::runtime_error("Failed to send data to client");
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
         }
+        totalSentSize += static_cast<std::size_t>(sendSize);
     }
-    for (std::size_t i = 0; i < requestSize; i++) {
-        ssize_t sendSize = send(fd, request.data() + i, 1, 0);
+    totalSentSize = 0;
+    while (totalSentSize < requestSize) {
+        ssize_t sendSize = send(fd, request.data() + totalSentSize, requestSize - totalSentSize , 0);
         if (sendSize == -1) {
             throw std::runtime_error("Failed to send data to client");
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
         }
+        totalSentSize += static_cast<std::size_t>(sendSize);
     }
-
     return receiveFrame(fd);
 }
 
