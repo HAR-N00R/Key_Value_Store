@@ -48,30 +48,27 @@ add_executable(concurrency_tests
         src/Network/Socket.cpp
         src/Server/Server.cpp
         src/Protocol/CommandParser.cpp
-        src/KeyValueStore/KeyValueStore.cpp
 )
 
-target_include_directories(concurrency_tests PRIVATE src)
+target_link_libraries(concurrency_tests PRIVATE kvstore_lib)
 
 add_executable(server_shutdown_tests
-        tests/serverShutdownTests.cpp
+        tests/ServerShutdownTests.cpp
         src/Network/Socket.cpp
         src/Server/Server.cpp
         src/Protocol/CommandParser.cpp
-        src/KeyValueStore/KeyValueStore.cpp
 )
 
-target_include_directories(server_shutdown_tests PRIVATE src)
+target_link_libraries(server_shutdown_tests PRIVATE kvstore_lib)
 
 add_executable(server_robustness_tests
         tests/ServerRobustnessTests.cpp
         src/Network/Socket.cpp
         src/Server/Server.cpp
         src/Protocol/CommandParser.cpp
-        src/KeyValueStore/KeyValueStore.cpp
 )
 
-target_include_directories(server_robustness_tests PRIVATE src)
+target_link_libraries(server_robustness_tests PRIVATE kvstore_lib)
 
 add_executable(kvstore_benchmark
         benchmarks/KeyValueStoreBenchmark.cpp
@@ -92,11 +89,29 @@ add_test(
 )
 
 add_test(
+        NAME NetworkFramingTests
+        COMMAND network_framing_tests
+)
+
+add_test(
         NAME ServerConcurrencyTests
         COMMAND concurrency_tests
 )
 
 add_test(
+        NAME ServerShutdownTests
+        COMMAND server_shutdown_tests
+)
+
+add_test(
         NAME ServerRobustnessTests
         COMMAND server_robustness_tests
+)
+
+set_tests_properties(
+        NetworkFramingTests
+        ServerConcurrencyTests
+        ServerShutdownTests
+        ServerRobustnessTests
+        PROPERTIES TIMEOUT 10
 )
