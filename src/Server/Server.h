@@ -5,11 +5,16 @@
 #include <atomic>
 #include "KeyValueStore/KeyValueStore.h"
 #include "Protocol/Command.h"
+#include <mutex>
+#include <vector>
 
 class Server {
     private:
     int serverSocket = -1;
-    std::atomic<bool> isRunning{false};
+    std::atomic<bool> isRunning{true};
+
+    std::vector<int> activeClients;
+    std::mutex clientsMutex;
 
     //KVS functions
     KeyValueStore store;

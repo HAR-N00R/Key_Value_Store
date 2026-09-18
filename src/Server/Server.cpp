@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <cerrno>
 
 // Key = 1MB
 // Value = 16MB
@@ -46,16 +47,22 @@ Server::~Server() {
 }
 
 void Server::run() {
-    isRunning.store(true);
     std::vector<std::thread> threads;
     while (isRunning.load()) {
         int fd = acceptSocket();
+        std::unique_lock lock(clientsMutex);
         if (!isRunning.load()) {
+            if (fd >= 0) {
+                close(fd);
+            }
             break;
         }
+        activeClients.push_back(fd);
         threads.emplace_back([fd, this](){
             Socket client(fd);
             handleClient(client);
+            std::unique_lock lock(clientsMutex);
+            std::erase(activeClients, fd);
         });
     }
     for (auto& thread : threads) {
@@ -65,7 +72,15 @@ void Server::run() {
 
 void Server::stop() {
     isRunning.store(false);
-    shutdown(serverSocket, SHUT_RDWR);
+    if (serverSocket >= 0) {
+        shutdown(serverSocket, SHUT_RDWR);
+        close(serverSocket);
+        serverSocket = -1;
+    }
+    std::unique_lock lock(clientsMutex);
+    for (int fd : activeClients) {
+        shutdown(fd, SHUT_RDWR);
+    }
 }
 
 int Server::acceptSocket() {
@@ -78,6 +93,7 @@ int Server::acceptSocket() {
     if (!isRunning.load()) {
         if (clientSocket >= 0) {
             close(clientSocket);
+            return -1;
         }
     }
     return clientSocket;
@@ -108,6 +124,9 @@ bool Server::receiveFrame(int clientSocket, std::string& message) {
         ssize_t receivedSize = recv(clientSocket, reinterpret_cast<char*>(&messageSize) + totalReceivedSize,
             (sizeof(uint32_t)- totalReceivedSize), 0);
         if (receivedSize == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
             throw std::runtime_error("Failed to receive data from client");
         }
         if (receivedSize == 0 && totalReceivedSize == 0) {
@@ -128,6 +147,9 @@ bool Server::receiveFrame(int clientSocket, std::string& message) {
             ssize_t receivedSize = recv(clientSocket, message.data() + totalReceivedSize, messageSize - totalReceivedSize,
                 0);
             if (receivedSize == -1) {
+                if (errno == EINTR) {
+                    continue;
+                }
                 throw std::runtime_error("Failed to receive data from client");
             }
             if (receivedSize == 0) {
@@ -153,6 +175,9 @@ void Server::sendAll(int clientSocket, const char* data, std::size_t size) {
     while (totalSentSize < size) {
         ssize_t sendSize = send(clientSocket, data + totalSentSize, size - totalSentSize, 0);
         if (sendSize == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
             throw std::runtime_error("Failed to send data to client");
         }
         if (sendSize == 0) {
