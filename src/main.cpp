@@ -3,23 +3,31 @@
 #include "Server/Server.h"
 
 int main() {
-    std::cout << std::string(60, '=') << std::endl;
-    std::cout << "Welcome to Key Value Store" << std::endl;
-    std::cout << std::string(60, '=') << std::endl;
+    try {
+        Server server("data.db");
+        std::thread serverThread([&server]()
+        {
+            server.run();
+        });
 
-    Server server("data.db");
-    std::thread serverThread([&server]()
-    {
-        server.run();
-    });
-    int stopTest;
-    std::cin >> stopTest;
-    if (stopTest == 1) {
+        std::cout << std::string(60, '=') << std::endl;
+        std::cout << "Server running on port 8080." << std::endl;
+        std::cout << std::string(60, '=') << std::endl;
+        std::cout << "Press enter to shutdown server";
+        std::string line;
+        std::getline(std::cin, line);
+
         std::cout << std::string(60, '=') << std::endl;
         server.stop();
-        std::cout << std::string(60, '-') << std::endl;
+        std::cout << "Server shutdown successful" << std::endl;
+        std::cout << std::string(60, '=') << std::endl;
+
+        serverThread.join();
     }
-    serverThread.join();
+    catch (const std::exception& e) {
+        std::cerr << "Server error: " << e.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }
