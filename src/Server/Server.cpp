@@ -59,10 +59,18 @@ void Server::run() {
         }
         activeClients.push_back(fd);
         threads.emplace_back([fd, this](){
-            Socket client(fd);
-            handleClient(client);
-            std::unique_lock lock(clientsMutex);
-            std::erase(activeClients, fd);
+                Socket client(fd);
+            try {
+                handleClient(client);
+            }
+            catch (const std::exception& e) {
+                std::cerr << e.what() << std::endl;
+            }
+            catch (...) {
+                std::cerr << "Unknown error occurred" << std::endl;
+            }
+                std::unique_lock lock(clientsMutex);
+                std::erase(activeClients, fd);
         });
     }
     for (auto& thread : threads) {
@@ -87,33 +95,35 @@ int Server::acceptSocket() {
     sockaddr_in clientAddr{};
     socklen_t len = sizeof(clientAddr);
     int clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &len);
-    if (clientSocket == -1 && isRunning.load()) {
-        throw std::runtime_error("Failed to accept connection");
-    }
-    if (!isRunning.load()) {
-        if (clientSocket >= 0) {
-            close(clientSocket);
+    if (clientSocket == -1) {
+        if (!isRunning.load()) {
             return -1;
         }
+        throw std::runtime_error("Failed to accept connection");
+    }
+    int opt = 1;
+    if (setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof (opt)) == -1) {
+        close(clientSocket);
+        throw std::runtime_error("Failed to set NO-SIGPIPE");
+    }
+    if (!isRunning.load()) {
+        close(clientSocket);
+        return -1;
     }
     return clientSocket;
 }
 
 void Server::handleClient(Socket& client) {
     int clientSocket = client.getSocket();
-    try {
-        CommandParser parser;
-        while (true) {
-            std::string request;
-            if (!receiveFrame(clientSocket, request)) {
-                break;
-            }
-            std::string response = executeCommand(parser.parse(request));
-            sendFrame(clientSocket, response);
+
+    CommandParser parser;
+    while (true) {
+        std::string request;
+        if (!receiveFrame(clientSocket, request)) {
+            break;
         }
-    }
-    catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+        std::string response = executeCommand(parser.parse(request));
+        sendFrame(clientSocket, response);
     }
 }
 
@@ -178,7 +188,12 @@ void Server::sendAll(int clientSocket, const char* data, std::size_t size) {
             if (errno == EINTR) {
                 continue;
             }
-            throw std::runtime_error("Failed to send data to client");
+            if (errno == EPIPE) {
+                throw std::runtime_error("Client disconnected while sending");
+            }
+            else {
+                throw std::runtime_error("Failed to send data to client");
+            }
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
