@@ -199,27 +199,12 @@ int main() {
     std::string message;
     std::string valueBeforeRestart;
     std::string valueAfterRestart;
-    std::atomic_bool serverIsRunning(false);
     {
-        std::thread serverThread([&serverIsRunning]()
+        Server server("test_data.db");
+        std::thread serverThread([&server]()
         {
-            Server server("test_data.db");
-            serverIsRunning.store(true);
-            serverIsRunning.notify_one();
-            std::vector<std::thread> clientThreads;
-            for (int i = 0; i < 15; i++) {
-                int fd = server.acceptSocket();
-                clientThreads.emplace_back([&server, fd]()
-                {
-                    Socket client(fd);
-                    server.handleClient(client);
-                });
-            }
-            for (auto& thread : clientThreads) {
-                thread.join();
-            }
+            server.run();
         });
-        serverIsRunning.wait(false);
         std::thread clientThread1(concurrencyTest, 0);
         std::thread clientThread2(concurrencyTest, 100);
         std::thread clientThread3(concurrencyTest, 200);
@@ -249,6 +234,7 @@ int main() {
         clientThread12.join();
         valueBeforeRestart = checkValuePersistence("testKey");
         compactRequest();
+        server.stop();
         serverThread.join();
     }
 
