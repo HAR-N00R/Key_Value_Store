@@ -49,30 +49,34 @@ std::string sendFrame(int fd, const std::string& request) {
     uint32_t networkSize = htonl(requestSize);
 
     const char* dataSize = reinterpret_cast<const char*>(&networkSize);
-    for (std::size_t i = 0; i < sizeof(networkSize); ++i) {
-        ssize_t sendSize = send(fd, dataSize + i, 1, 0);
+    std::size_t totalSentSize = 0;
+    while (totalSentSize < sizeof(uint32_t)) {
+        ssize_t sendSize = send(fd, dataSize + totalSentSize, sizeof(uint32_t) - totalSentSize, 0);
         if (sendSize == -1) {
             throw std::runtime_error("Failed to send data to client");
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
         }
+        totalSentSize += static_cast<std::size_t>(sendSize);
     }
-    for (std::size_t i = 0; i < requestSize; i++) {
-        ssize_t sendSize = send(fd, request.data() + i, 1, 0);
+    totalSentSize = 0;
+    while (totalSentSize < requestSize) {
+        ssize_t sendSize = send(fd, request.data() + totalSentSize, requestSize - totalSentSize , 0);
         if (sendSize == -1) {
             throw std::runtime_error("Failed to send data to client");
         }
         if (sendSize == 0) {
             throw std::runtime_error("Failed to send data to client");
         }
+        totalSentSize += static_cast<std::size_t>(sendSize);
     }
     return receiveFrame(fd);
 }
 
 
 void sendOverSizedFrames(int fd) {
-    uint32_t requestSize = MAX_FRAME_SIZE*2;
+    uint32_t requestSize = MAX_FRAME_SIZE * 2;
     uint32_t networkSize = htonl(requestSize);
 
     const char* dataSize = reinterpret_cast<const char*>(&networkSize);
@@ -131,10 +135,45 @@ void sendTruncatedHeader(int fd, const std::string& request) {
     return;
 }
 
+void sendDisconnect(int fd, const std::string& request) {
+    uint32_t requestSize = request.size();
+    uint32_t networkSize = htonl(requestSize);
+
+    const char* dataSize = reinterpret_cast<const char*>(&networkSize);
+    for (std::size_t i = 0; i < sizeof(networkSize); ++i) {
+        ssize_t sendSize = send(fd, dataSize + i, 1, 0);
+        if (sendSize == -1) {
+            throw std::runtime_error("Failed to send data to client");
+        }
+        if (sendSize == 0) {
+            throw std::runtime_error("Failed to send data to client");
+        }
+    }
+    for (std::size_t i = 0; i < requestSize; i++) {
+        ssize_t sendSize = send(fd, request.data() + i, 1, 0);
+        if (sendSize == -1) {
+            throw std::runtime_error("Failed to send data to client");
+        }
+        if (sendSize == 0) {
+            throw std::runtime_error("Failed to send data to client");
+        }
+    }
+    return;
+}
+
 void connectToServer(const std::string& request, const int method) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
         throw std::runtime_error("failed to create socket");
+    }
+    if (method == 4) {
+        struct linger option{};
+        option.l_onoff = 1;
+        option.l_linger = 0;
+        if (setsockopt(fd, SOL_SOCKET, SO_LINGER, &option, sizeof(option)) == -1) {
+            close(fd);
+            throw std::runtime_error("Failed to set SO_LINGER");
+        }
     }
     sockaddr_in serveraddr_in{};
     serveraddr_in.sin_family = AF_INET;
@@ -156,6 +195,9 @@ void connectToServer(const std::string& request, const int method) {
         }
         else if (method == 3) {
             sendOverSizedFrames(fd);
+        }
+        else if (method == 4) {
+            sendDisconnect(fd, request);
         }
         close(fd);
     }
@@ -196,16 +238,20 @@ int main() {
     std::filesystem::remove("server_robustness_test.db");
     Server server("server_robustness_test.db");
 
-    std::thread serverThread([&server]() {
+    std::thread serverThread([&server]()
+    {
         server.run();
     });
 
+    std::string largeValue(10*1024*1024,'A');
+    assert(connectToServer("set bulky " + largeValue) == "Key Set");
+    connectToServer("get bulky", 4);
     assert(connectToServer("set Hello World!") == "Key Set");
-    connectToServer("set test server",1);
+    connectToServer("set test server", 1);
     assert(connectToServer("get test") == "Key doesn't exist");
-    connectToServer("set beta alpha",2);
+    connectToServer("set beta alpha", 2);
     assert(connectToServer("get beta") == "Key doesn't exist");
-    connectToServer("set charlie delta",3);
+    connectToServer("set charlie delta", 3);
     assert(connectToServer("get charlie") == "Key doesn't exist");
     assert(connectToServer("get Hello")== "Hello: World!");
 

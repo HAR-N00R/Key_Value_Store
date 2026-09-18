@@ -1,14 +1,18 @@
+#include <cassert>
+#include <filesystem>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdexcept>
 #include <iostream>
 #include <string>
+#include <thread>
 #include "./Network/Socket.h"
+#include "Server/Server.h"
 
 constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 20;
 
-void receiveFrame(int fd) {
+std::string receiveFrame(int fd) {
     uint32_t messageSize;
     std::size_t totalReceivedSize = 0;
     while (totalReceivedSize < sizeof(uint32_t)) {
@@ -39,10 +43,10 @@ void receiveFrame(int fd) {
         }
         totalReceivedSize += static_cast<std::size_t>(receivedSize);
     }
-    std::cout << message << std::endl;
+    return message;
 }
 
-void sendFrame(int fd, const std::string& request) {
+std::string sendFrame(int fd, const std::string& request) {
     uint32_t requestSize = request.size();
     uint32_t networkSize = htonl(requestSize);
 
@@ -69,7 +73,7 @@ void sendFrame(int fd, const std::string& request) {
     }
     std::cout << "Sent: " << sizeof(uint32_t) + totalSent << " bytes" << std::endl;
 
-    receiveFrame(fd);
+    return receiveFrame(fd);
 }
 
 void framingTest() {
@@ -85,17 +89,23 @@ void framingTest() {
         throw std::runtime_error("Failed to connect to server");
     }
     std::cout << "Connection established" << std::endl;
-    while (true) {
-        std::string response;
-        std::getline(std::cin, response);
-        if (response == "quit") {
-            break;
-        }
-        sendFrame(fd, response);
-    }
+
+    assert(sendFrame(fd, "set framing works") == "Key Set");
+    assert(sendFrame(fd, "get framing") == "framing: works");
 }
 
 int main() {
+    std::filesystem::remove("network_framing_test.db");
+    Server server("network_framing_test.db");
+
+    std::thread serverThread([&server]()
+    {
+        server.run();
+    });
     framingTest();
+    server.stop();
+    serverThread.join();
+
+    std::cout << "Framing test passed" << std::endl;
     return 0;
 }
