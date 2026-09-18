@@ -1,10 +1,38 @@
-# Persistent Key-Value Store
+# Concurrent Key-Value Server
 
-A persistent key-value storage engine written in C++20, backed by an in-memory hash index and an append-only binary log.
+A persistent key-value server written in C++20.
 
-The program stores key-value pairs in memory for fast access, while also saving changes to a binary file so the data is still available after restarting the program.
+The project started as a basic local key-value store and was later expanded into a TCP server that can handle multiple clients at the same time.
 
-The command-line interface supports:
+Data is kept in an in-memory hash table for fast access and is also written to a binary log so it can be recovered after restarting the program.
+
+## Features
+
+- TCP client/server architecture
+- Multiple concurrent clients
+- Thread-safe key-value store
+- Persistent binary storage
+- Append-only log
+- Recovery after restarting
+- Delete tombstones
+- Database compaction
+- Length-prefixed network protocol
+- Graceful server shutdown
+- Handling for incomplete and oversized network frames
+- Protection against disconnected clients
+- Automated tests with CTest
+
+## Supported Commands
+
+```text
+SET key value
+GET key
+EXISTS key
+DELETE key
+COMPACT
+```
+
+Example:
 
 ```text
 SET username Div
@@ -12,76 +40,47 @@ GET username
 EXISTS username
 DELETE username
 COMPACT
-QUIT
 ```
 
-## Features
-
-- Store key-value pairs
-- Get values using a key
-- Check if a key exists
-- Delete keys
-- Persistent storage across program restarts
-- Binary file storage
-- Append-only log
-- Delete tombstones
-- Recovery from incomplete final log records
-- Basic corruption detection
-- Database compaction
-- Automated tests
-- Performance benchmarks
-
-## How It Works
-
-The program has two main parts for storing data.
+## Architecture
 
 ```text
-KeyValueStore
-     |
-     +---- unordered_map
-     |        |
-     |        +---- current data in memory
-     |
-     +---- binary log file
-              |
-              +---- saved history on disk
+Client
+   |
+   v
+TCP Connection
+   |
+   v
+Server
+   |
+   v
+Command Parser
+   |
+   v
+Key-Value Store
+   |
+   +---- unordered_map
+   |
+   +---- Binary Log File
 ```
 
-The `std::unordered_map` stores the current version of every key and value.
+The server accepts TCP connections and gives each connected client its own worker thread.
 
-The database file stores all successful `SET` and `DELETE` operations.
+Requests use a 4-byte length prefix so the server knows how many bytes belong to each message.
 
-For example:
+The command parser converts the received text into commands that are passed to the key-value store.
 
-```text
-SET score 10
-SET score 20
-SET score 30
-```
+## Storage
 
-The file contains all three operations, but the map only keeps:
-
-```text
-score -> 30
-```
-
-## In-Memory Storage
-
-The current data is stored using:
+The current values are stored in:
 
 ```cpp
 std::unordered_map<std::string, std::string>
 ```
 
-This gives average O(1) lookup, insertion, and deletion.
+Changes are also written to an append-only binary log.
 
-This means operations such as `GET` and `EXISTS` can usually be done very quickly without reading from disk.
-
-## Binary File Format
-
-The database uses a binary file instead of a normal text file.
-
-Each record stores:
+Each record contains information similar to:
 
 ```text
 operation
@@ -91,96 +90,29 @@ value size
 value
 ```
 
-For example, a SET record is roughly:
+When the program starts, it reads the log and rebuilds the in-memory hash table.
 
-```text
-[SET][key size][key][value size][value]
+If the last record was only partly written, the store can recover by keeping the valid records before it.
+
+## Concurrency
+
+Multiple clients can access the same key-value store.
+
+The store uses:
+
+```cpp
+std::shared_mutex
 ```
 
-A DELETE record is roughly:
+Read operations such as `GET` and `EXISTS` can happen at the same time.
 
-```text
-[DELETE][key size][key][0]
-```
+Write operations such as `SET`, `DELETE`, and `COMPACT` require exclusive access.
 
-The program stores the lengths of the key and value before storing the actual data.
-
-Because of this, values can contain spaces, tabs, newlines, and empty strings without breaking the file format.
-
-## Append-Only Log
-
-The program does not rewrite the whole database after every change.
-
-Instead, new operations are added to the end of the file.
-
-For example:
-
-```text
-SET a 10
-SET b 20
-SET a 30
-DELETE b
-```
-
-All four operations stay in the file.
-
-The current data in memory becomes:
-
-```text
-a -> 30
-```
-
-This makes writes simple, but the file becomes larger over time because old data stays in the log.
-
-## Loading the Database
-
-When the program starts, it reads the log from beginning to end.
-
-Each operation is applied to the in-memory map.
-
-For example:
-
-```text
-SET a 10
-SET b 20
-SET a 30
-DELETE b
-```
-
-After replaying the log, the final state is:
-
-```text
-a -> 30
-```
-
-This allows the program to rebuild the database after restarting.
-
-## Crash Recovery
-
-The program can recover if the final database record was only partly written.
-
-For example, the file may contain:
-
-```text
-complete record
-complete record
-partial record
-```
-
-The program keeps the complete records and removes the incomplete part at the end of the file.
-
-It also checks for some forms of corrupted data, including:
-
-- invalid operation values
-- keys that are too large
-- values that are too large
-- invalid DELETE records
-
-A corrupted record is not automatically deleted unless it looks like an incomplete final write.
+The server also tracks active client connections so they can be closed during shutdown.
 
 ## Compaction
 
-Because the database uses an append-only log, old values and deleted keys stay in the file.
+Because the log is append-only, old values and deleted keys remain in the database file.
 
 For example:
 
@@ -188,60 +120,51 @@ For example:
 SET score 10
 SET score 20
 SET score 30
-SET name Alice
 DELETE name
 ```
 
-The current database only needs:
+Compaction rewrites the database using only the current live key-value pairs.
 
-```text
-score -> 30
-```
+This keeps the database file from growing forever.
 
-The `COMPACT` command creates a new database file using only the current live data.
+## Network Robustness
 
-After compaction, the old values and tombstones are removed.
+The server handles several networking problems, including:
 
-A temporary file is created first so the original database is not immediately overwritten.
+- partial TCP reads
+- partial TCP writes
+- interrupted system calls
+- incomplete frame headers
+- incomplete frame payloads
+- oversized frames
+- clients disconnecting unexpectedly
+- clients disconnecting while the server is sending data
 
-## Time Complexity
-
-| Operation | Average Time |
-|---|---:|
-| GET | O(1) |
-| EXISTS | O(1) |
-| SET | O(1) average + disk write |
-| DELETE | O(1) average + disk write |
-| Recovery | O(n) |
-| Compaction | O(m) |
-
-`n` is the number of records stored in the log.
-
-`m` is the number of live keys currently stored in the database.
-
-The hash table can have worse performance in the worst case if many keys cause hash collisions.
+A bad client connection should only affect that client and not stop the entire server.
 
 ## Testing
 
-The project includes automated tests for:
+The project has automated tests for:
 
-- SET and GET
-- overwriting values
-- missing keys
-- EXISTS
-- DELETE
-- persistence after restart
-- deleted keys after restart
-- empty values
-- tabs and newlines
-- compaction
-- crash recovery
-- writing after recovery
-- invalid operations
-- corrupted record sizes
+- key-value operations
+- persistence and recovery
+- command parsing
+- TCP framing
+- fragmented network messages
+- concurrent clients
+- concurrent writes
+- compaction under concurrency
+- graceful shutdown
+- malformed clients
+- oversized and incomplete frames
 
-The tests use separate database files so they do not modify the normal `data.db` file.
+Run all tests with:
 
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+The current test suite contains six CTest test groups.
 
 ## Project Structure
 
@@ -249,22 +172,44 @@ The tests use separate database files so they do not modify the normal `data.db`
 Key_Value_Store/
 ├── CMakeLists.txt
 ├── README.md
-├── .gitignore
 │
 ├── src/
 │   ├── main.cpp
-│   ├── KeyValueStore.cpp
-│   └── KeyValueStore.h
+│   │
+│   ├── KeyValueStore/
+│   │   ├── KeyValueStore.cpp
+│   │   └── KeyValueStore.h
+│   │
+│   ├── Network/
+│   │   ├── Socket.cpp
+│   │   └── Socket.h
+│   │
+│   ├── Protocol/
+│   │   ├── Command.h
+│   │   ├── CommandParser.cpp
+│   │   └── CommandParser.h
+│   │
+│   └── Server/
+│       ├── Server.cpp
+│       └── Server.h
 │
 └── tests/
-    └── KeyValueStoreTests.cpp
+    ├── KeyValueStoreTests.cpp
+    ├── CommandParserTests.cpp
+    ├── NetworkFramingTest.cpp
+    ├── ServerConcurrencyTests.cpp
+    ├── ServerShutdownTests.cpp
+    └── ServerRobustnessTests.cpp
 ```
 
 ## Requirements
 
 - C++20
 - CMake
-- A C++ compiler such as Clang or GCC
+- Clang or GCC
+- POSIX sockets
+
+The project was developed and tested on macOS.
 
 ## Build
 
@@ -277,79 +222,43 @@ cmake --build build
 
 ## Run
 
-Run the main program:
+Start the server with:
 
 ```bash
 ./build/kvstore
 ```
 
-The program creates a file called:
+The server stores its persistent data in:
 
 ```text
 data.db
 ```
 
-This file stores the database log.
-
 ## Run Tests
 
 ```bash
-./build/kvstore_tests
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
-
 
 ## Limitations
 
-This project is not meant to be a production database.
+This is a learning project and is not meant to be a production database.
 
-Some current limitations are:
+Some limitations are:
 
-- single database file
-- single-threaded
-- no multiple clients
+- one database file
+- one worker thread per client
+- no authentication
 - no transactions
 - no checksums
-- no file format versioning
-- no network support
 - no automatic compaction
-- fixed key and value size limits
-- full log replay is required when the program starts
-- no guarantee that every successful stream write has already reached physical storage
+- full log replay during startup
+- fixed key, value, and network frame limits
+- networking code is currently designed for macOS/POSIX sockets
 
-## Future Improvements
+## What I Learned
 
-Possible future improvements include:
+This project helped me learn how a storage engine and a network server work together.
 
-- automatic compaction
-- checksums
-- stronger crash protection
-- thread safety
-- multiple clients
-- TCP networking
-- client/server architecture
-- better indexing
-- file format versioning
-
-A future version could turn this project into a networked key-value server:
-
-```text
-Client
-   |
-   v
-TCP Server
-   |
-   v
-Command Parser
-   |
-   v
-KeyValueStore
-   |
-   v
-Database File
-```
-
-## Why I Built This
-
-I built this project to understand more than just basic C++ programs.
-
-It helped me learn how data can be stored in memory and on disk, how an append-only log works, how a database can recover after an incomplete write, how compaction removes old data, and how automated tests and benchmarks can be used to check a storage engine.
+I worked with file persistence, binary data, TCP sockets, message framing, threads, mutexes, resource management, error handling, graceful shutdown, and automated testing.
