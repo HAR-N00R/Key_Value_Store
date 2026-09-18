@@ -1,4 +1,5 @@
 # Concurrent Key-Value Server
+[![Build and Test](https://github.com/HAR-N00R/Key_Value_Store/actions/workflows/ci.yml/badge.svg)](https://github.com/HAR-N00R/Key_Value_Store/actions/workflows/ci.yml)
 
 A persistent key-value server written in C++20.
 
