@@ -1,16 +1,17 @@
 #ifndef SERVER_H
 #define SERVER_H
 #include <string>
-#include <Network/Socket.h>
+#include "Network/Socket.h"
 #include <atomic>
 #include "KeyValueStore/KeyValueStore.h"
 #include "Protocol/Command.h"
 #include <mutex>
 #include <vector>
+#include <algorithm>
 
 class Server {
     private:
-    int serverSocket = -1;
+    std::atomic_int serverSocket{-1};
     std::atomic<bool> isRunning{true};
 
     std::vector<int> activeClients;

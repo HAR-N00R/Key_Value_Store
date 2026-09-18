@@ -9,14 +9,13 @@
 #include <netinet/in.h>
 #include <cerrno>
 
-// Key = 1MB
-// Value = 16MB
+// command + 16 MB value + protocol overhead
 constexpr std::size_t MAX_FRAME_SIZE = 1024 * 1024 * 20;
 
 
 Server::Server(const std::string& filePath) : store(filePath) {
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket < 0) {
+    serverSocket.store(socket(AF_INET, SOCK_STREAM, 0));
+    if (serverSocket.load() < 0) {
         throw std::runtime_error("Failed to open socket");
     }
     sockaddr_in serverAddr{};
@@ -25,24 +24,24 @@ Server::Server(const std::string& filePath) : store(filePath) {
     serverAddr.sin_port = htons(8080);
 
     int opt = 1;
-    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
-        close(serverSocket);
+    if (setsockopt(serverSocket.load(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
+        close(serverSocket.load());
         throw std::runtime_error("Failed to set SO_REUSEADDR");
     }
 
-    if (bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == -1) {
-        close(serverSocket);
+    if (bind(serverSocket.load(), reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == -1) {
+        close(serverSocket.load());
         throw std::runtime_error("Failed to bind socket");
     }
-    if (listen(serverSocket, SOMAXCONN) == -1) {
-        close(serverSocket);
+    if (listen(serverSocket.load(), SOMAXCONN) == -1) {
+        close(serverSocket.load());
         throw std::runtime_error("Failed to listen on socket");
     }
 }
 
 Server::~Server() {
-    if (serverSocket >= 0) {
-        close(serverSocket);
+    if (serverSocket.load() >= 0) {
+        close(serverSocket.load());
     }
 }
 
@@ -58,8 +57,9 @@ void Server::run() {
             break;
         }
         activeClients.push_back(fd);
-        threads.emplace_back([fd, this](){
-                Socket client(fd);
+        threads.emplace_back([fd, this]()
+        {
+            Socket client(fd);
             try {
                 handleClient(client);
             }
@@ -69,8 +69,8 @@ void Server::run() {
             catch (...) {
                 std::cerr << "Unknown error occurred" << std::endl;
             }
-                std::unique_lock lock(clientsMutex);
-                std::erase(activeClients, fd);
+            std::unique_lock lock(clientsMutex);
+            std::erase(activeClients, fd);
         });
     }
     for (auto& thread : threads) {
@@ -80,10 +80,10 @@ void Server::run() {
 
 void Server::stop() {
     isRunning.store(false);
-    if (serverSocket >= 0) {
-        shutdown(serverSocket, SHUT_RDWR);
-        close(serverSocket);
-        serverSocket = -1;
+    int fd = serverSocket.exchange(-1);
+    if (fd >= 0) {
+        shutdown(fd, SHUT_RDWR);
+        close(fd);
     }
     std::unique_lock lock(clientsMutex);
     for (int fd : activeClients) {
@@ -94,23 +94,31 @@ void Server::stop() {
 int Server::acceptSocket() {
     sockaddr_in clientAddr{};
     socklen_t len = sizeof(clientAddr);
-    int clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &len);
-    if (clientSocket == -1) {
-        if (!isRunning.load()) {
+    while (true) {
+        if (serverSocket.load() < 0 || !isRunning.load()) {
             return -1;
         }
-        throw std::runtime_error("Failed to accept connection");
+        int clientSocket = accept(serverSocket.load(), reinterpret_cast<sockaddr*>(&clientAddr), &len);
+        if (clientSocket == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (!isRunning.load()) {
+                return -1;
+            }
+            throw std::runtime_error("Failed to accept connection");
+        }
+        int opt = 1;
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof (opt)) == -1) {
+            close(clientSocket);
+            throw std::runtime_error("Failed to set NO-SIGPIPE");
+        }
+        if (!isRunning.load()) {
+            close(clientSocket);
+            return -1;
+        }
+        return clientSocket;
     }
-    int opt = 1;
-    if (setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof (opt)) == -1) {
-        close(clientSocket);
-        throw std::runtime_error("Failed to set NO-SIGPIPE");
-    }
-    if (!isRunning.load()) {
-        close(clientSocket);
-        return -1;
-    }
-    return clientSocket;
 }
 
 void Server::handleClient(Socket& client) {
@@ -132,7 +140,7 @@ bool Server::receiveFrame(int clientSocket, std::string& message) {
     std::size_t totalReceivedSize = 0;
     while (totalReceivedSize < sizeof(uint32_t)) {
         ssize_t receivedSize = recv(clientSocket, reinterpret_cast<char*>(&messageSize) + totalReceivedSize,
-            (sizeof(uint32_t)- totalReceivedSize), 0);
+                                    (sizeof(uint32_t) - totalReceivedSize), 0);
         if (receivedSize == -1) {
             if (errno == EINTR) {
                 continue;
@@ -147,27 +155,27 @@ bool Server::receiveFrame(int clientSocket, std::string& message) {
         }
         totalReceivedSize += static_cast<std::size_t>(receivedSize);
     }
-        messageSize = ntohl(messageSize);
-        if (messageSize > MAX_FRAME_SIZE) {
-            throw std::runtime_error("Message too large");
-        }
-        message.resize(messageSize, '\0');
-        totalReceivedSize = 0;
-        while (totalReceivedSize < (messageSize)) {
-            ssize_t receivedSize = recv(clientSocket, message.data() + totalReceivedSize, messageSize - totalReceivedSize,
-                0);
-            if (receivedSize == -1) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                throw std::runtime_error("Failed to receive data from client");
+    messageSize = ntohl(messageSize);
+    if (messageSize > MAX_FRAME_SIZE) {
+        throw std::runtime_error("Message too large");
+    }
+    message.resize(messageSize, '\0');
+    totalReceivedSize = 0;
+    while (totalReceivedSize < (messageSize)) {
+        ssize_t receivedSize = recv(clientSocket, message.data() + totalReceivedSize, messageSize - totalReceivedSize,
+                                    0);
+        if (receivedSize == -1) {
+            if (errno == EINTR) {
+                continue;
             }
-            if (receivedSize == 0) {
-                throw std::runtime_error("Client disconnected while receiving");
-            }
-            totalReceivedSize += static_cast<std::size_t>(receivedSize);
+            throw std::runtime_error("Failed to receive data from client");
         }
-        return true;
+        if (receivedSize == 0) {
+            throw std::runtime_error("Client disconnected while receiving");
+        }
+        totalReceivedSize += static_cast<std::size_t>(receivedSize);
+    }
+    return true;
 }
 
 void Server::sendFrame(int clientSocket, const std::string& frame) {

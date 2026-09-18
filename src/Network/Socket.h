@@ -7,7 +7,7 @@ private:
     int socketFd = -1;
 
 public:
-    Socket(int soc);
+    explicit Socket(int soc);
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
     ~Socket();
