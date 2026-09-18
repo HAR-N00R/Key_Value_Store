@@ -107,5 +107,5 @@ set_tests_properties(
         ServerConcurrencyTests
         ServerShutdownTests
         ServerRobustnessTests
-        PROPERTIES TIMEOUT 150
+        PROPERTIES TIMEOUT 10
 )
